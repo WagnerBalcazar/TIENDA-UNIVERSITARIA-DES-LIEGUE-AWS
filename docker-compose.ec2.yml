@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.aws
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DEBUG: "False"
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.aws
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on: [backend]

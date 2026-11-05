@@ -11,34 +11,33 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# CAMBIO 1: Cambiamos el valor por defecto de DEBUG a True para desarrollo local
 env = environ.Env(
     DEBUG=(bool, True)
 )
 environ.Env.read_env(BASE_DIR / '.env')
 
 # ================= STRIPE CONFIGURATION =================
-STRIPE_SECRET_KEY = env('STRIPE_SECRET_KEY', default='rk_test_51TiKmSHRp3SyFZZ3QtXNfDqXiq0ZqxL1NWANsrmEHBXrl1B2lxITSWOmuDOahI3GrOQlbLEV57E5lG80YbGRpBZ000blPhed1X')
+STRIPE_SECRET_KEY = env('STRIPE_SECRET_KEY', default='')
 STRIPE_WEBHOOK_SECRET = env('STRIPE_WEBHOOK_SECRET', default='')
 
-FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost')
 
 # Quick-start development settings - unsuitable for production
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY', default='django-insecure-_ne$d927q6*r7c7^mv5t*+i283@(ktk-#&q6ucvbcove8hkd_4')
+SECRET_KEY = env('SECRET_KEY', default='')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
+if DEBUG and not SECRET_KEY:
+    SECRET_KEY = 'django-insecure-local-development-only-key'
 
-# CAMBIO 2: Permitimos todos los hosts en desarrollo local para posibilitar conexiones desde dispositivos móviles en la red local
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['127.0.0.1', 'localhost', '*'])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['127.0.0.1', 'localhost'])
+if not DEBUG and not SECRET_KEY:
+    raise RuntimeError('SECRET_KEY debe estar configurada cuando DEBUG=False')
 
 # Configuración de negocio
 from decimal import Decimal
 IMPUESTO_IVA = Decimal(env('IMPUESTO_IVA', default='0.12'))
-
-# Application definition
-# ... (deja el resto del archivo exactamente igual desde INSTALLED_APPS hacia abajo)
 
 # Application definition
 
@@ -59,6 +58,7 @@ AUTH_USER_MODEL = 'tienda.Usuario'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -91,13 +91,17 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'ATOMIC_REQUESTS': False,
+DATABASE_URL = env('DATABASE_URL', default='')
+if DATABASE_URL:
+    DATABASES = {'default': environ.Env.db_url_config(DATABASE_URL)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'ATOMIC_REQUESTS': False,
+        }
     }
-}
 
 
 # Password validation
@@ -134,20 +138,41 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='')
+AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = True
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+STORAGES = {
+    'default': {
+        'BACKEND': 'storages.backends.s3.S3Storage' if AWS_STORAGE_BUCKET_NAME else 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
 # ================= CORS CONFIGURATION =================
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost:5173',  # Vite default
-])
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
 
 CORS_ALLOW_CREDENTIALS = True
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31536000)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # ================= REST FRAMEWORK CONFIGURATION =================
 REST_FRAMEWORK = {

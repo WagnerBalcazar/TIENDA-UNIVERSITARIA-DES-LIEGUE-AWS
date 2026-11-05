@@ -298,8 +298,9 @@ class ProductoApiTests(TestCase):
         res = self.client.delete(detail_url)
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         
-        # Verify product removed
-        self.assertFalse(Producto.objects.filter(pk=self.p1.id).exists())
+        # Deletion is a soft delete so historical sales keep their product reference.
+        self.p1.refresh_from_db()
+        self.assertFalse(self.p1.is_activo)
     
     def test_delete_product_unauthenticated(self):
         """Test: DELETE sin auth retorna 401"""
@@ -1140,5 +1141,4 @@ class PedidoApiTests(TestCase):
         # El cliente no puede ver la acción de actualizar porque no es en la lista,
         # sino que debe fallar con 403
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
-
 
